@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Part 1 - RAG 技術入門與價值</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+
+        .nav-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            z-index: 10000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .nav-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .nav-buttons { display: flex; gap: 12px; }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.25);
+            color: white;
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.4);
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 9000;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nav-arrow:hover {
+            background: rgba(255,255,255,0.5);
+            transform: translateY(-50%) scale(1.1);
+        }
+        .prev-arrow { left: 30px; }
+        .next-arrow { right: 30px; }
+        .nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .slide-container {
+            width: 100%;
+            height: 100vh;
+            padding-top: 60px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .slide {
+            position: absolute;
+            top: 60px; left: 0;
+            width: 100%;
+            height: calc(100vh - 60px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: 10;
+        }
+
+        .slide.active {
+            display: flex;
+            opacity: 1;
+            z-index: 20;
+        }
+
+        .content-card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            padding: 60px;
+            max-width: 1400px;
+            width: 95%;
+            max-height: 88vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        h1 { color: #1e3c72; font-size: 56px; margin-bottom: 24px; text-align: center; }
+        h2 { color: #2a5298; font-size: 38px; margin-bottom: 35px; border-bottom: 3px solid #1e3c72; padding-bottom: 12px; }
+        h3 { color: #1e3c72; font-size: 26px; margin: 30px 0 15px 0; }
+        p, li { font-size: 22px; line-height: 1.8; color: #444; margin-bottom: 15px; }
+        code { background: #f0f2f5; padding: 3px 8px; border-radius: 6px; font-family: monospace; color: #d63384; font-weight: 600; font-size: 0.95em; }
+        pre { background: #282c34; color: #abb2bf; padding: 25px; border-radius: 12px; overflow-x: auto; margin: 25px 0; font-size: 18px; line-height: 1.6; font-family: monospace; }
+        .box { padding: 25px; border-radius: 12px; margin: 25px 0; border-left: 6px solid; font-size: 20px; }
+        .info { background: #e3f2fd; border-color: #2196f3; color: #0d47a1; }
+        .warning { background: #fff3cd; border-color: #ffc107; color: #856404; }
+        .success { background: #d4edda; border-color: #28a745; color: #155724; }
+        .highlight { background: linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%); padding: 2px 6px; border-radius: 4px; font-weight: bold; color: #004d40; }
+
+        .concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin-top: 30px; }
+        .concept-card { background: #f8f9fa; padding: 25px; border-radius: 15px; border: 1px solid #e9ecef; transition: transform 0.3s; }
+        .concept-card:hover { transform: translateY(-8px); border-color: #4facfe; }
+
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 25px 0; font-size: 18px; }
+        .comparison-table th, .comparison-table td { padding: 15px; border: 1px solid #ddd; text-align: left; }
+        .comparison-table th { background: #1e3c72; color: white; }
+        .comparison-table tr:nth-child(even) { background: #f8f9fa; }
+
+        .indicators { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 4000; padding: 10px 25px; background: rgba(0,0,0,0.3); border-radius: 30px; backdrop-filter: blur(5px); }
+        .dot { width: 12px; height: 12px; background: rgba(255,255,255,0.4); border-radius: 50%; cursor: pointer; }
+        .dot.active { background: #4facfe; transform: scale(1.3); }
+
+        .emoji-large { font-size: 80px; margin-bottom: 20px; }
+        .center { text-align: center; }
+
+        .step-list { counter-reset: step; list-style: none; padding-left: 0; }
+        .step-list li { counter-increment: step; padding: 20px 20px 20px 70px; margin: 15px 0; background: #f8f9fa; border-radius: 12px; position: relative; }
+        .step-list li::before { content: counter(step); position: absolute; left: 15px; top: 50%; transform: translateY(-50%); background: #1e3c72; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <a href="index.html" class="nav-btn home-btn">← 返回首頁</a>
+        <div class="nav-title">Part 1 - RAG 技術入門與價值</div>
+        <div class="nav-buttons">
+            <button class="nav-btn" onclick="goToSlide(0)">首頁</button>
+            <button class="nav-btn" onclick="toggleFullscreen()">全螢幕</button>
+            <a href="index.html" class="nav-btn">回總覽</a>
+        </div>
+    </div>
+
+    <div class="slide-container">
+
+        <!-- Slide 1: 封面 -->
+        <div class="slide active">
+            <div class="content-card center">
+                <div class="emoji-large">🤖</div>
+                <h1>打造 RAG 知識庫問答平台</h1>
+                <h2 style="border: none; font-weight: normal; font-size: 32px; color: #666;">
+                    Part 1：RAG 技術入門與價值
+                </h2>
+                <div style="margin-top: 40px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                    <span class="highlight">RAG 技術</span>
+                    <span class="highlight">知識庫</span>
+                    <span class="highlight">AI 問答</span>
+                    <span class="highlight">實作導向</span>
+                </div>
+                <p style="margin-top: 40px; color: #888;">讓 AI 擁有「專屬記憶」的關鍵技術</p>
+            </div>
+        </div>
+
+        <!-- Slide 2: 學習目標 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🎯 本單元學習目標</h2>
+                <p>完成這個單元後，你將能夠：</p>
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>1. 理解 RAG</h3>
+                        <p>了解 RAG（檢索增強生成）的核心概念與運作原理</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>2. 知道 RAG 價值</h3>
+                        <p>明白為什麼 RAG 對企業與個人 AI 應用如此重要</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>3. 認識應用場景</h3>
+                        <p>掌握 RAG 技術在各種情境中的實際應用</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>4. 準備動手實作</h3>
+                        <p>為後續的實作建立必要的背景知識</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: AI 的限制 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🤔 你有沒有遇過這些問題？</h2>
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>❌ 時效性問題</h3>
+                        <p>「AI 不知道最新的產品資訊」</p>
+                        <p style="color: #666; font-size: 18px;">AI 的訓練資料有截止日期</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>❌ 專業性問題</h3>
+                        <p>「AI 不了解我們公司的內部流程」</p>
+                        <p style="color: #666; font-size: 18px;">AI 只有通用知識，沒有你的專業資料</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>❌ 可靠性問題</h3>
+                        <p>「AI 有時會胡說八道」</p>
+                        <p style="color: #666; font-size: 18px;">AI 會產生「幻覺」，回答看似合理但錯誤的內容</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>❌ 來源不明</h3>
+                        <p>「AI 的答案不知道從哪來的」</p>
+                        <p style="color: #666; font-size: 18px;">無法追溯資訊來源，難以驗證正確性</p>
+                    </div>
+                </div>
+                <div class="box info" style="margin-top: 30px;">
+                    <strong>這些問題的解決方案就是：RAG 技術！</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: 什麼是 RAG -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📚 什麼是 RAG？</h2>
+                <div style="text-align: center; margin: 30px 0;">
+                    <h3 style="font-size: 36px; color: #1e3c72;">
+                        <span class="highlight">R</span>etrieval-<span class="highlight">A</span>ugmented <span class="highlight">G</span>eneration
+                    </h3>
+                    <p style="font-size: 28px; color: #666; margin-top: 15px;">檢索增強生成</p>
+                </div>
+                <div class="concept-grid">
+                    <div class="concept-card" style="background: #e3f2fd;">
+                        <h3>🔍 Retrieval（檢索）</h3>
+                        <p>在回答問題前，先從知識庫中「找出」相關資料</p>
+                    </div>
+                    <div class="concept-card" style="background: #fff3cd;">
+                        <h3>⬆️ Augmented（增強）</h3>
+                        <p>用找到的資料「加強」AI 的背景知識</p>
+                    </div>
+                    <div class="concept-card" style="background: #d4edda;">
+                        <h3>✍️ Generation（生成）</h3>
+                        <p>AI 基於增強後的知識「產生」精準答案</p>
+                    </div>
+                </div>
+                <div class="box success" style="margin-top: 30px;">
+                    <strong>簡單說：RAG = 先找資料，再回答問題</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: 生活化比喻 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>💡 用生活來理解 RAG</h2>
+                <div style="display: flex; gap: 40px; margin-top: 30px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 300px;">
+                        <h3>📝 傳統 AI</h3>
+                        <p>就像一個學生只靠記憶回答考試題目</p>
+                        <ul>
+                            <li>只能用腦袋裡記得的東西</li>
+                            <li>可能記錯或記不清楚</li>
+                            <li>無法回答訓練時沒學過的內容</li>
+                        </ul>
+                    </div>
+                    <div style="flex: 1; min-width: 300px;">
+                        <h3>📚 RAG AI</h3>
+                        <p>就像一個學生可以翻閱課本來回答問題</p>
+                        <ul>
+                            <li>先從課本找到相關段落</li>
+                            <li>根據找到的內容整理答案</li>
+                            <li>答案有明確的參考來源</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="box info" style="margin-top: 30px;">
+                    <strong>RAG 讓 AI 擁有了「翻閱資料」的能力！</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: 傳統 AI vs RAG -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>⚖️ 傳統 AI vs RAG AI</h2>
+                <table class="comparison-table">
+                    <tr>
+                        <th>比較項目</th>
+                        <th>傳統 AI</th>
+                        <th>RAG AI</th>
+                    </tr>
+                    <tr>
+                        <td><strong>知識來源</strong></td>
+                        <td>僅限訓練資料</td>
+                        <td>訓練資料 + 外部知識庫</td>
+                    </tr>
+                    <tr>
+                        <td><strong>時效性</strong></td>
+                        <td>❌ 資料有截止日期</td>
+                        <td>✅ 可隨時更新</td>
+                    </tr>
+                    <tr>
+                        <td><strong>專業性</strong></td>
+                        <td>❌ 只有通用知識</td>
+                        <td>✅ 可客製化專業領域</td>
+                    </tr>
+                    <tr>
+                        <td><strong>可靠性</strong></td>
+                        <td>❌ 可能產生幻覺</td>
+                        <td>✅ 基於真實文件</td>
+                    </tr>
+                    <tr>
+                        <td><strong>可追溯</strong></td>
+                        <td>❌ 無法確認來源</td>
+                        <td>✅ 顯示參考來源</td>
+                    </tr>
+                    <tr>
+                        <td><strong>更新成本</strong></td>
+                        <td>❌ 需重新訓練模型</td>
+                        <td>✅ 只需更新知識庫</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Slide 7: RAG 運作流程 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🔄 RAG 運作流程</h2>
+                <ol class="step-list">
+                    <li>
+                        <strong>使用者提問</strong><br>
+                        <span style="color: #666;">例如：「什麼是 Flask？」</span>
+                    </li>
+                    <li>
+                        <strong>問題向量化</strong><br>
+                        <span style="color: #666;">將問題轉換成數學向量（一串數字）</span>
+                    </li>
+                    <li>
+                        <strong>相似度搜尋</strong><br>
+                        <span style="color: #666;">在知識庫中找出最相關的內容</span>
+                    </li>
+                    <li>
+                        <strong>上下文注入</strong><br>
+                        <span style="color: #666;">將找到的知識提供給 AI 作為參考</span>
+                    </li>
+                    <li>
+                        <strong>AI 生成答案</strong><br>
+                        <span style="color: #666;">AI 根據知識庫內容產生精準回答</span>
+                    </li>
+                    <li>
+                        <strong>顯示結果與來源</strong><br>
+                        <span style="color: #666;">呈現答案並標示參考來源</span>
+                    </li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Slide 8: 應用場景 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🎯 RAG 應用場景</h2>
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>🏢 企業知識管理</h3>
+                        <p>將公司文件、操作手冊整理成知識庫</p>
+                        <p style="color: #28a745;">員工提問 → AI 從內部文件找答案</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>🎧 客服問答系統</h3>
+                        <p>整理常見問題，提供即時自動回覆</p>
+                        <p style="color: #28a745;">7/24 自動化客服支援</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>🎓 教育學習平台</h3>
+                        <p>建立課程知識庫，學生隨時提問</p>
+                        <p style="color: #28a745;">AI 助教協助學習</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>📖 技術文件問答</h3>
+                        <p>API 文件、故障排除指南</p>
+                        <p style="color: #28a745;">開發者快速找到解答</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>⚖️ 專業領域諮詢</h3>
+                        <p>法律、醫療、金融等專業知識</p>
+                        <p style="color: #28a745;">提供有根據的專業建議</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>📝 個人知識管理</h3>
+                        <p>整理讀書筆記、學習心得</p>
+                        <p style="color: #28a745;">打造專屬 AI 助手</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: 我們要做的專案 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🚀 我們要打造的專案</h2>
+                <div class="box success">
+                    <h3 style="margin-bottom: 15px;">RAG 知識庫 AI 問答平台</h3>
+                    <p>一個完整的 AI 問答系統，具備以下功能：</p>
+                </div>
+                <div class="concept-grid" style="margin-top: 30px;">
+                    <div class="concept-card">
+                        <h3>✅ 多 AI 模型支援</h3>
+                        <p>OpenAI GPT-4o、Google Gemini 2.0</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>✅ 向量相似度搜尋</h3>
+                        <p>智慧語意搜尋，找出最相關內容</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>✅ 知識庫管理</h3>
+                        <p>新增、編輯、刪除、批次匯入</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>✅ 來源引用</h3>
+                        <p>顯示答案的參考來源與相似度</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>✅ Google 試算表整合</h3>
+                        <p>一鍵同步雲端知識庫</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>✅ 現代化介面</h3>
+                        <p>美觀易用的網頁對話介面</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: 專案預覽 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>👀 專案預覽</h2>
+                <div style="display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 350px;">
+                        <h3>🖥️ 主要畫面</h3>
+                        <div class="box info">
+                            <ul style="margin: 0;">
+                                <li>聊天對話介面</li>
+                                <li>AI 模型切換</li>
+                                <li>知識庫管理面板</li>
+                                <li>設定對話框</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div style="flex: 1; min-width: 350px;">
+                        <h3>⚡ 核心體驗</h3>
+                        <div class="box success">
+                            <ul style="margin: 0;">
+                                <li>提問 → 立即得到答案</li>
+                                <li>答案下方顯示「參考來源」</li>
+                                <li>相似度百分比一目了然</li>
+                                <li>隨時新增、更新知識</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="box warning" style="margin-top: 30px;">
+                    <strong>下一個 Part：我們將實際動手部署這個平台！</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 11: 本單元總結 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📝 Part 1 總結</h2>
+                <div class="concept-grid">
+                    <div class="concept-card" style="background: #e3f2fd;">
+                        <h3>RAG 是什麼</h3>
+                        <p>檢索增強生成 = 先找資料再回答</p>
+                    </div>
+                    <div class="concept-card" style="background: #fff3cd;">
+                        <h3>為什麼需要 RAG</h3>
+                        <p>解決 AI 的時效性、專業性、可靠性限制</p>
+                    </div>
+                    <div class="concept-card" style="background: #d4edda;">
+                        <h3>核心流程</h3>
+                        <p>提問 → 檢索 → 增強 → 生成 → 引用來源</p>
+                    </div>
+                    <div class="concept-card" style="background: #f8d7da;">
+                        <h3>應用價值</h3>
+                        <p>企業知識管理、客服、教育、專業諮詢</p>
+                    </div>
+                </div>
+                <div class="box success" style="margin-top: 40px; text-align: center;">
+                    <h3>🎉 準備好了嗎？</h3>
+                    <p style="font-size: 24px;">下一個 Part：動手部署你的第一個 RAG 平台！</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <button class="nav-arrow prev-arrow" id="prevBtn" onclick="changeSlide(-1)">❮</button>
+    <button class="nav-arrow next-arrow" id="nextBtn" onclick="changeSlide(1)">❯</button>
+
+    <div class="indicators" id="indicatorContainer"></div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function init() {
+            createIndicators();
+            showSlide(0);
+            updateButtons();
+            document.addEventListener('keydown', handleKeydown);
+        }
+
+        function handleKeydown(e) {
+            if (e.key === 'ArrowLeft') changeSlide(-1);
+            if (e.key === 'ArrowRight') changeSlide(1);
+        }
+
+        function createIndicators() {
+            const container = document.getElementById('indicatorContainer');
+            container.innerHTML = '';
+            slides.forEach((_, index) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                dot.onclick = () => goToSlide(index);
+                container.appendChild(dot);
+            });
+        }
+
+        function showSlide(index) {
+            if (index < 0) index = 0;
+            if (index >= totalSlides) index = totalSlides - 1;
+
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[index].classList.add('active');
+            currentSlide = index;
+
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach((dot, idx) => {
+                dot.classList.toggle('active', idx === index);
+            });
+
+            updateButtons();
+        }
+
+        function changeSlide(direction) {
+            showSlide(currentSlide + direction);
+        }
+
+        function goToSlide(index) {
+            showSlide(index);
+        }
+
+        function updateButtons() {
+            document.getElementById('prevBtn').disabled = currentSlide === 0;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

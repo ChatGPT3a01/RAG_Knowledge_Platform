@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 知識庫 AI 問答平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- 設定面板 -->
+    <div id="settingsPanel" class="panel">
+        <div class="panel-header">
+            <h2><i class="fas fa-cog"></i> 系統設定</h2>
+            <button id="closeSettings" class="close-btn">&times;</button>
+        </div>
+        <div class="panel-content">
+            <div class="form-group">
+                <label><i class="fas fa-robot"></i> AI 服務:</label>
+                <select id="apiType">
+                    <option value="openai">OpenAI (GPT)</option>
+                    <option value="google">Google AI Studio (Gemini)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-microchip"></i> AI 模型:</label>
+                <select id="modelName">
+                    <!-- OpenAI 模型（2025 最新版） -->
+                    <optgroup label="OpenAI 模型" id="openaiModels">
+                        <option value="gpt-5">GPT-5 ⭐ 最新旗艦</option>
+                        <option value="gpt-4.1">GPT-4.1</option>
+                        <option value="gpt-4o">GPT-4o</option>
+                    </optgroup>
+                    <!-- Google 模型（2025 最新版） -->
+                    <optgroup label="Google 模型" id="googleModels" style="display:none;">
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash ⭐ 推薦（免費）</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-key"></i> API Key:</label>
+                <input type="password" id="apiKey" placeholder="請輸入您的 API Key">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-user-tag"></i> AI 角色:</label>
+                <select id="aiRole">
+                    <option value="知識庫助理">知識庫助理</option>
+                    <option value="專業導師">專業導師</option>
+                    <option value="程式撰寫助理">程式撰寫助理</option>
+                    <option value="幽默風趣的聊天夥伴">幽默風趣的聊天夥伴</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="useRAG" checked>
+                    啟用 RAG 知識庫檢索
+                </label>
+            </div>
+            <button id="saveSettings" class="btn btn-primary">
+                <i class="fas fa-save"></i> 儲存設定
+            </button>
+        </div>
+    </div>
+
+    <!-- 知識庫管理面板 -->
+    <div id="kbPanel" class="panel">
+        <div class="panel-header">
+            <h2><i class="fas fa-database"></i> 知識庫管理</h2>
+            <button id="closeKB" class="close-btn">&times;</button>
+        </div>
+        <div class="panel-content">
+            <!-- 統計資訊 -->
+            <div class="stats-container">
+                <div class="stat-card">
+                    <i class="fas fa-book"></i>
+                    <div class="stat-info">
+                        <div class="stat-value" id="totalCount">0</div>
+                        <div class="stat-label">總筆數</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-clock"></i>
+                    <div class="stat-info">
+                        <div class="stat-value" id="lastUpdated">-</div>
+                        <div class="stat-label">最後更新</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按鈕 -->
+            <div class="action-buttons">
+                <button id="btnAddKB" class="btn btn-success">
+                    <i class="fas fa-plus"></i> 新增知識
+                </button>
+                <button id="btnImportCSV" class="btn btn-info">
+                    <i class="fas fa-file-upload"></i> 匯入 CSV/Excel
+                </button>
+                <button id="btnExportCSV" class="btn btn-warning">
+                    <i class="fas fa-file-download"></i> 匯出 CSV
+                </button>
+                <button id="btnSyncGoogleSheets" class="btn btn-primary">
+                    <i class="fab fa-google"></i> 同步試算表
+                </button>
+                <button id="btnRefreshKB" class="btn btn-secondary">
+                    <i class="fas fa-sync"></i> 重新整理
+                </button>
+            </div>
+
+            <!-- 搜尋框 -->
+            <div class="search-box">
+                <input type="text" id="kbSearch" placeholder="搜尋知識庫...">
+                <button id="btnSearch"><i class="fas fa-search"></i></button>
+            </div>
+
+            <!-- 知識庫表格 -->
+            <div class="table-container">
+                <table id="kbTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%">ID</th>
+                            <th style="width: 25%">問題</th>
+                            <th style="width: 40%">答案</th>
+                            <th style="width: 10%">分類</th>
+                            <th style="width: 10%">時間</th>
+                            <th style="width: 10%">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kbTableBody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 40px;">
+                                <i class="fas fa-inbox" style="font-size: 48px; color: #ccc;"></i>
+                                <p style="color: #999; margin-top: 10px;">暫無知識庫資料</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/編輯知識對話框 -->
+    <div id="kbDialog" class="dialog">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h3 id="dialogTitle"><i class="fas fa-edit"></i> 新增知識</h3>
+                <button id="closeDialog" class="close-btn">&times;</button>
+            </div>
+            <div class="dialog-body">
+                <div class="form-group">
+                    <label>問題:</label>
+                    <textarea id="kbQuestion" rows="3" placeholder="請輸入問題..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>答案:</label>
+                    <textarea id="kbAnswer" rows="6" placeholder="請輸入答案..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>分類:</label>
+                    <input type="text" id="kbCategory" placeholder="例如：程式設計、人工智慧..." value="一般">
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button id="btnSaveKB" class="btn btn-primary">
+                    <i class="fas fa-save"></i> 儲存
+                </button>
+                <button id="btnCancelDialog" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 檔案上傳對話框 -->
+    <div id="uploadDialog" class="dialog">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h3><i class="fas fa-file-upload"></i> 匯入知識庫</h3>
+                <button id="closeUploadDialog" class="close-btn">&times;</button>
+            </div>
+            <div class="dialog-body">
+                <div class="upload-area" id="uploadArea">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #4CAF50;"></i>
+                    <p>拖曳檔案到此處或點擊選擇檔案</p>
+                    <p style="font-size: 12px; color: #999;">支援格式: CSV, Excel (.xlsx, .xls)</p>
+                    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;">
+                </div>
+                <div id="fileInfo" style="display: none; margin-top: 15px;">
+                    <p><strong>已選擇:</strong> <span id="fileName"></span></p>
+                </div>
+                <div class="info-box">
+                    <strong>檔案格式要求:</strong>
+                    <ul>
+                        <li>必須包含欄位: question, answer</li>
+                        <li>可選欄位: category（預設為「一般」）</li>
+                        <li>範例檔案: <a href="#" id="downloadExample">knowledge_base_example.csv</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button id="btnUploadFile" class="btn btn-primary" disabled>
+                    <i class="fas fa-upload"></i> 上傳
+                </button>
+                <button id="btnCancelUpload" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google 試算表同步對話框 -->
+    <div id="syncDialog" class="dialog">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h3><i class="fab fa-google"></i> 同步 Google 試算表</h3>
+                <button id="closeSyncDialog" class="close-btn">&times;</button>
+            </div>
+            <div class="dialog-body">
+                <div class="info-box">
+                    <p><strong>請先完成以下設定:</strong></p>
+                    <ol>
+                        <li>在 Google Sheets 建立試算表</li>
+                        <li>部署 Google Apps Script API</li>
+                        <li>取得 GAS API URL</li>
+                    </ol>
+                    <p>詳細說明請參考: <code>gas_scripts/部署說明.md</code></p>
+                </div>
+                <div class="form-group">
+                    <label>GAS API URL:</label>
+                    <input type="text" id="gasApiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+                </div>
+            </div>
+            <div class="dialog-footer">
+                <button id="btnSyncNow" class="btn btn-primary">
+                    <i class="fas fa-sync"></i> 立即同步
+                </button>
+                <button id="btnCancelSync" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主控制面板 -->
+    <div class="main-header">
+        <h1><i class="fas fa-brain"></i> RAG 知識庫 AI 問答平台</h1>
+        <div class="header-buttons">
+            <button id="openSettings" class="btn btn-icon" title="設定">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button id="openKB" class="btn btn-icon" title="知識庫管理">
+                <i class="fas fa-database"></i>
+            </button>
+            <button id="clearChat" class="btn btn-icon" title="清空對話">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 聊天容器 -->
+    <div class="chat-wrapper">
+        <div id="chatContainer" class="chat-container">
+            <div id="messages" class="messages">
+                <div class="welcome-message">
+                    <i class="fas fa-robot" style="font-size: 64px; color: #4CAF50;"></i>
+                    <h2>歡迎使用 RAG 知識庫 AI 問答平台</h2>
+                    <p>我會根據知識庫內容為您提供精確的回答</p>
+                    <div class="quick-actions">
+                        <button class="quick-btn" onclick="quickAction('管理')">
+                            <i class="fas fa-database"></i> 管理知識庫
+                        </button>
+                        <button class="quick-btn" onclick="quickAction('設定')">
+                            <i class="fas fa-cog"></i> 系統設定
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 輸入區域 -->
+        <div class="input-wrapper">
+            <div class="input-container">
+                <textarea id="messageInput" placeholder="請輸入您的問題..." rows="1"></textarea>
+                <button id="sendBtn" class="send-btn">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 載入動畫 -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>處理中...</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

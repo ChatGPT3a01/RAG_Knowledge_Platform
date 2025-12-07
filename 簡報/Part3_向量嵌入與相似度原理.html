@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Part 3 - 向量嵌入與相似度原理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+        .nav-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            z-index: 10000;
+        }
+        .nav-title { font-size: 22px; font-weight: 700; color: #fff; }
+        .nav-buttons { display: flex; gap: 12px; }
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.4); transform: translateY(-2px); }
+        .nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.25);
+            color: white;
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.4);
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 9000;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nav-arrow:hover { background: rgba(255,255,255,0.5); transform: translateY(-50%) scale(1.1); }
+        .prev-arrow { left: 30px; }
+        .next-arrow { right: 30px; }
+        .nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+        .slide-container { width: 100%; height: 100vh; padding-top: 60px; position: relative; z-index: 1; }
+        .slide {
+            position: absolute;
+            top: 60px; left: 0;
+            width: 100%;
+            height: calc(100vh - 60px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: 10;
+        }
+        .slide.active { display: flex; opacity: 1; z-index: 20; }
+        .content-card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            padding: 50px;
+            max-width: 1400px;
+            width: 95%;
+            max-height: 88vh;
+            overflow-y: auto;
+        }
+        h1 { color: #11998e; font-size: 52px; margin-bottom: 24px; text-align: center; }
+        h2 { color: #0d7377; font-size: 36px; margin-bottom: 30px; border-bottom: 3px solid #11998e; padding-bottom: 12px; }
+        h3 { color: #11998e; font-size: 24px; margin: 25px 0 15px 0; }
+        p, li { font-size: 20px; line-height: 1.8; color: #444; margin-bottom: 12px; }
+        code { background: #e8f5e9; padding: 3px 8px; border-radius: 6px; font-family: 'Consolas', monospace; color: #2e7d32; font-weight: 600; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 12px; overflow-x: auto; margin: 20px 0; font-size: 16px; line-height: 1.6; font-family: 'Consolas', monospace; }
+        .box { padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 6px solid; font-size: 18px; }
+        .info { background: #e3f2fd; border-color: #2196f3; color: #0d47a1; }
+        .warning { background: #fff3cd; border-color: #ffc107; color: #856404; }
+        .success { background: #d4edda; border-color: #28a745; color: #155724; }
+        .highlight { background: linear-gradient(120deg, #11998e 0%, #38ef7d 100%); padding: 2px 8px; border-radius: 4px; font-weight: bold; color: white; }
+        .concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 25px; }
+        .concept-card { background: #f8f9fa; padding: 20px; border-radius: 15px; border: 1px solid #e9ecef; transition: transform 0.3s; }
+        .concept-card:hover { transform: translateY(-5px); border-color: #11998e; }
+        .indicators { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 4000; padding: 10px 25px; background: rgba(0,0,0,0.3); border-radius: 30px; }
+        .dot { width: 12px; height: 12px; background: rgba(255,255,255,0.4); border-radius: 50%; cursor: pointer; }
+        .dot.active { background: #38ef7d; transform: scale(1.3); }
+        .emoji-large { font-size: 70px; margin-bottom: 20px; }
+        .center { text-align: center; }
+        .vector-box { background: #f0f9f4; border: 2px solid #11998e; border-radius: 12px; padding: 20px; margin: 15px 0; font-family: monospace; font-size: 16px; text-align: center; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+        .arrow-flow { display: flex; align-items: center; justify-content: center; gap: 15px; margin: 30px 0; flex-wrap: wrap; }
+        .arrow-flow .step { background: #e8f5e9; padding: 15px 25px; border-radius: 12px; font-weight: bold; }
+        .arrow-flow .arrow { font-size: 24px; color: #11998e; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <a href="index.html" class="nav-btn home-btn">← 返回首頁</a>
+        <div class="nav-title">Part 3 - 向量嵌入與相似度原理</div>
+        <div class="nav-buttons">
+            <button class="nav-btn" onclick="goToSlide(0)">首頁</button>
+            <button class="nav-btn" onclick="toggleFullscreen()">全螢幕</button>
+            <a href="index.html" class="nav-btn">回總覽</a>
+        </div>
+    </div>
+
+    <div class="slide-container">
+
+        <!-- Slide 1: 封面 -->
+        <div class="slide active">
+            <div class="content-card center">
+                <div class="emoji-large">🧮</div>
+                <h1>向量嵌入與相似度原理</h1>
+                <h2 style="border: none; font-weight: normal; font-size: 28px; color: #666;">
+                    Part 3：理解 RAG 的核心技術 - 如何讓電腦「理解」語意
+                </h2>
+                <div style="margin-top: 40px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                    <span class="highlight">向量嵌入</span>
+                    <span class="highlight">語意搜尋</span>
+                    <span class="highlight">餘弦相似度</span>
+                    <span class="highlight">Embedding</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: 為什麼需要向量 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🤔 電腦如何「理解」文字？</h2>
+                <p>電腦其實不懂文字，它只懂數字！</p>
+
+                <div class="two-col" style="margin-top: 30px;">
+                    <div class="concept-card" style="background: #ffebee;">
+                        <h3>❌ 傳統關鍵字搜尋</h3>
+                        <p>搜尋「蘋果」只能找到包含「蘋果」這個詞的文件</p>
+                        <p style="color: #c62828; font-size: 16px;">找不到「iPhone」「水果」等相關內容</p>
+                    </div>
+                    <div class="concept-card" style="background: #e8f5e9;">
+                        <h3>✅ 語意向量搜尋</h3>
+                        <p>搜尋「蘋果」能找到語意相關的內容</p>
+                        <p style="color: #2e7d32; font-size: 16px;">能找到「水果」「Apple」「iPhone」等</p>
+                    </div>
+                </div>
+
+                <div class="box info" style="margin-top: 30px;">
+                    <strong>關鍵差異：</strong>向量搜尋理解「意思」，不只是比對「字串」！
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: 什麼是向量嵌入 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📐 什麼是向量嵌入（Embedding）？</h2>
+
+                <p>向量嵌入就是把文字轉換成「一串數字」，讓電腦能夠計算。</p>
+
+                <div class="vector-box">
+                    <div style="margin-bottom: 15px;">
+                        <strong>「Python 是程式語言」</strong>
+                    </div>
+                    <div style="font-size: 14px; color: #666;">↓ 經過 Embedding 模型轉換 ↓</div>
+                    <div style="margin-top: 15px; color: #11998e;">
+                        [0.234, -0.567, 0.891, 0.123, -0.456, 0.789, ...]
+                    </div>
+                    <div style="font-size: 14px; color: #888; margin-top: 10px;">
+                        （這串數字稱為「向量」，通常有 384~768 個維度）
+                    </div>
+                </div>
+
+                <div class="box success">
+                    <strong>核心概念：</strong>語意相近的句子，轉換出來的向量也會很相近！
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: 向量空間概念 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🌌 向量空間的魔法</h2>
+
+                <p>想像所有文字都被放進一個「多維空間」裡...</p>
+
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>🍎 水果區</h3>
+                        <ul style="font-size: 16px;">
+                            <li>「蘋果」</li>
+                            <li>「香蕉」</li>
+                            <li>「橘子」</li>
+                        </ul>
+                        <p style="color: #666; font-size: 14px;">這些詞彼此距離很近</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>💻 程式區</h3>
+                        <ul style="font-size: 16px;">
+                            <li>「Python」</li>
+                            <li>「JavaScript」</li>
+                            <li>「程式設計」</li>
+                        </ul>
+                        <p style="color: #666; font-size: 14px;">這些詞彼此距離很近</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>📊 距離代表相似度</h3>
+                        <p>向量距離越近 = 語意越相似</p>
+                        <p>向量距離越遠 = 語意越不同</p>
+                    </div>
+                </div>
+
+                <div class="box info" style="margin-top: 20px;">
+                    這就是為什麼搜尋「程式入門」能找到「Python 教學」！
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: 專案使用的模型 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🤖 我們使用的 Embedding 模型</h2>
+
+                <div class="vector-box" style="background: #e3f2fd;">
+                    <div style="font-size: 24px; font-weight: bold; color: #1565c0;">
+                        paraphrase-multilingual-MiniLM-L12-v2
+                    </div>
+                </div>
+
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>🌍 多語言支援</h3>
+                        <p>支援 50+ 種語言，包含中文、英文、日文等</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>🧠 語意理解</h3>
+                        <p>能理解句子的意思，不只是字面比對</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>📦 適中大小</h3>
+                        <p>約 400MB，平衡了效能與精確度</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>⚡ 速度快</h3>
+                        <p>處理一個句子只需幾十毫秒</p>
+                    </div>
+                </div>
+
+                <div class="box success">
+                    由 <strong>Sentence Transformers</strong> 套件提供，首次啟動會自動下載。
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: 相似度計算 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📏 如何計算相似度？</h2>
+
+                <p>我們使用 <strong>餘弦相似度（Cosine Similarity）</strong> 來計算向量之間的相似程度。</p>
+
+                <div class="two-col" style="margin-top: 30px;">
+                    <div>
+                        <h3>數學原理（簡化版）</h3>
+                        <p>計算兩個向量的「夾角」：</p>
+                        <ul>
+                            <li>夾角 = 0° → 完全相同（相似度 1）</li>
+                            <li>夾角 = 90° → 完全無關（相似度 0）</li>
+                            <li>夾角越小 → 越相似</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>實際意義</h3>
+                        <div class="concept-card" style="background: #e8f5e9;">
+                            <p><strong>相似度 0.95</strong> = 非常相關</p>
+                            <p><strong>相似度 0.70</strong> = 有些相關</p>
+                            <p><strong>相似度 0.30</strong> = 可能相關</p>
+                            <p><strong>相似度 &lt; 0.30</strong> = 不太相關</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="box info">
+                    系統預設門檻是 <strong>0.3</strong>，低於這個值的結果不會被採用。
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: RAG 搜尋流程 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🔄 RAG 向量搜尋流程</h2>
+
+                <div class="arrow-flow">
+                    <div class="step">使用者問題</div>
+                    <div class="arrow">→</div>
+                    <div class="step">問題向量化</div>
+                    <div class="arrow">→</div>
+                    <div class="step">計算相似度</div>
+                    <div class="arrow">→</div>
+                    <div class="step">排序篩選</div>
+                    <div class="arrow">→</div>
+                    <div class="step">取前 N 筆</div>
+                </div>
+
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>1️⃣ 問題向量化</h3>
+                        <p>「Flask 是什麼？」→ [0.12, -0.34, ...]</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>2️⃣ 逐一比對</h3>
+                        <p>與知識庫中每筆資料的向量計算相似度</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>3️⃣ 排序篩選</h3>
+                        <p>依相似度排序，篩選超過門檻的結果</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>4️⃣ 組成上下文</h3>
+                        <p>取前 3 筆最相關的內容給 AI 參考</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: 程式碼示範 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>💻 程式碼實作（簡化版）</h2>
+
+                <pre style="font-size: 15px;"><code># 1. 載入模型
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+# 2. 將問題轉換成向量
+question = "什麼是 Flask？"
+question_vector = model.encode(question)
+
+# 3. 計算與知識庫的相似度
+from sklearn.metrics.pairwise import cosine_similarity
+similarities = cosine_similarity([question_vector], knowledge_vectors)
+
+# 4. 找出最相似的內容
+top_indices = similarities[0].argsort()[-3:][::-1]  # 取前3筆</code></pre>
+
+                <div class="box success">
+                    <strong>就這麼簡單！</strong> 幾行程式碼就能實現語意搜尋。
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: 為什麼比關鍵字好 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>⚖️ 向量搜尋 vs 關鍵字搜尋</h2>
+
+                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                    <tr style="background: #11998e; color: white;">
+                        <th style="padding: 15px; border: 1px solid #ddd;">搜尋「如何學 Python」</th>
+                        <th style="padding: 15px; border: 1px solid #ddd;">關鍵字搜尋</th>
+                        <th style="padding: 15px; border: 1px solid #ddd;">向量搜尋</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 15px; border: 1px solid #ddd;">「Python 入門教學」</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">✅ 有 Python</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">✅ 語意相似</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;">
+                        <td style="padding: 15px; border: 1px solid #ddd;">「程式設計新手指南」</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">❌ 沒有 Python</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">✅ 語意相似</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 15px; border: 1px solid #ddd;">「學習寫程式的方法」</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">❌ 沒有 Python</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">✅ 語意相似</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;">
+                        <td style="padding: 15px; border: 1px solid #ddd;">「Python 蛇類介紹」</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">✅ 有 Python</td>
+                        <td style="padding: 15px; border: 1px solid #ddd; text-align: center;">❌ 語意不同</td>
+                    </tr>
+                </table>
+
+                <div class="box success" style="margin-top: 25px;">
+                    <strong>向量搜尋理解「意圖」，而不只是比對「字串」！</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: 實際效果展示 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🎯 實際效果展示</h2>
+
+                <div class="vector-box">
+                    <div style="font-size: 20px; margin-bottom: 15px;">
+                        <strong>使用者問題：</strong>「網站怎麼架設？」
+                    </div>
+                </div>
+
+                <h3>找到的相關知識：</h3>
+                <div class="concept-grid">
+                    <div class="concept-card" style="background: #e8f5e9; border-color: #4caf50;">
+                        <h3>🥇 相似度 92%</h3>
+                        <p>「如何建立網頁應用程式？」</p>
+                    </div>
+                    <div class="concept-card" style="background: #fff3cd; border-color: #ffc107;">
+                        <h3>🥈 相似度 85%</h3>
+                        <p>「Flask 網站部署教學」</p>
+                    </div>
+                    <div class="concept-card" style="background: #e3f2fd; border-color: #2196f3;">
+                        <h3>🥉 相似度 78%</h3>
+                        <p>「前端與後端的差異」</p>
+                    </div>
+                </div>
+
+                <div class="box info" style="margin-top: 20px;">
+                    即使問題的「用詞不同」，向量搜尋依然能找到相關內容！
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 11: 總結 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📝 Part 3 總結</h2>
+
+                <div class="concept-grid">
+                    <div class="concept-card" style="background: #e8f5e9;">
+                        <h3>向量嵌入</h3>
+                        <p>把文字轉成數字向量，讓電腦能計算語意</p>
+                    </div>
+                    <div class="concept-card" style="background: #e3f2fd;">
+                        <h3>餘弦相似度</h3>
+                        <p>計算向量夾角，判斷語意相似程度</p>
+                    </div>
+                    <div class="concept-card" style="background: #fff3cd;">
+                        <h3>語意搜尋</h3>
+                        <p>理解意思而非字面，找到真正相關的內容</p>
+                    </div>
+                    <div class="concept-card" style="background: #f8d7da;">
+                        <h3>RAG 核心</h3>
+                        <p>向量搜尋是 RAG 技術的靈魂所在</p>
+                    </div>
+                </div>
+
+                <div class="box success" style="margin-top: 30px; text-align: center;">
+                    <h3>🚀 下一步</h3>
+                    <p style="font-size: 22px;">Part 4：系統架構與程式碼解析！</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <button class="nav-arrow prev-arrow" id="prevBtn" onclick="changeSlide(-1)">❮</button>
+    <button class="nav-arrow next-arrow" id="nextBtn" onclick="changeSlide(1)">❯</button>
+    <div class="indicators" id="indicatorContainer"></div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function init() {
+            createIndicators();
+            showSlide(0);
+            updateButtons();
+            document.addEventListener('keydown', handleKeydown);
+        }
+
+        function handleKeydown(e) {
+            if (e.key === 'ArrowLeft') changeSlide(-1);
+            if (e.key === 'ArrowRight') changeSlide(1);
+        }
+
+        function createIndicators() {
+            const container = document.getElementById('indicatorContainer');
+            container.innerHTML = '';
+            slides.forEach((_, index) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                dot.onclick = () => goToSlide(index);
+                container.appendChild(dot);
+            });
+        }
+
+        function showSlide(index) {
+            if (index < 0) index = 0;
+            if (index >= totalSlides) index = totalSlides - 1;
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[index].classList.add('active');
+            currentSlide = index;
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach((dot, idx) => dot.classList.toggle('active', idx === index));
+            updateButtons();
+        }
+
+        function changeSlide(direction) { showSlide(currentSlide + direction); }
+        function goToSlide(index) { showSlide(index); }
+        function updateButtons() {
+            document.getElementById('prevBtn').disabled = currentSlide === 0;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+        }
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else if (document.exitFullscreen) document.exitFullscreen();
+        }
+        init();
+    </script>
+</body>
+</html>

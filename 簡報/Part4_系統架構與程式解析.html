@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Part 4 - 系統架構與程式解析</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft JhengHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: #333;
+        }
+        .nav-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            z-index: 10000;
+        }
+        .nav-title { font-size: 22px; font-weight: 700; color: #fff; }
+        .nav-buttons { display: flex; gap: 12px; }
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.4); transform: translateY(-2px); }
+        .nav-arrow {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.25);
+            color: white;
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.4);
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 9000;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .nav-arrow:hover { background: rgba(255,255,255,0.5); transform: translateY(-50%) scale(1.1); }
+        .prev-arrow { left: 30px; }
+        .next-arrow { right: 30px; }
+        .nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+        .slide-container { width: 100%; height: 100vh; padding-top: 60px; position: relative; z-index: 1; }
+        .slide {
+            position: absolute;
+            top: 60px; left: 0;
+            width: 100%;
+            height: calc(100vh - 60px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            z-index: 10;
+        }
+        .slide.active { display: flex; opacity: 1; z-index: 20; }
+        .content-card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            padding: 50px;
+            max-width: 1400px;
+            width: 95%;
+            max-height: 88vh;
+            overflow-y: auto;
+        }
+        h1 { color: #f5576c; font-size: 52px; margin-bottom: 24px; text-align: center; }
+        h2 { color: #c2185b; font-size: 36px; margin-bottom: 30px; border-bottom: 3px solid #f5576c; padding-bottom: 12px; }
+        h3 { color: #f5576c; font-size: 24px; margin: 25px 0 15px 0; }
+        p, li { font-size: 20px; line-height: 1.8; color: #444; margin-bottom: 12px; }
+        code { background: #fce4ec; padding: 3px 8px; border-radius: 6px; font-family: 'Consolas', monospace; color: #c2185b; font-weight: 600; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 12px; overflow-x: auto; margin: 20px 0; font-size: 15px; line-height: 1.6; font-family: 'Consolas', monospace; }
+        .box { padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 6px solid; font-size: 18px; }
+        .info { background: #e3f2fd; border-color: #2196f3; color: #0d47a1; }
+        .warning { background: #fff3cd; border-color: #ffc107; color: #856404; }
+        .success { background: #d4edda; border-color: #28a745; color: #155724; }
+        .highlight { background: linear-gradient(120deg, #f093fb 0%, #f5576c 100%); padding: 2px 8px; border-radius: 4px; font-weight: bold; color: white; }
+        .concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 25px; }
+        .concept-card { background: #f8f9fa; padding: 20px; border-radius: 15px; border: 1px solid #e9ecef; transition: transform 0.3s; }
+        .concept-card:hover { transform: translateY(-5px); border-color: #f5576c; }
+        .indicators { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 4000; padding: 10px 25px; background: rgba(0,0,0,0.3); border-radius: 30px; }
+        .dot { width: 12px; height: 12px; background: rgba(255,255,255,0.4); border-radius: 50%; cursor: pointer; }
+        .dot.active { background: #f5576c; transform: scale(1.3); }
+        .emoji-large { font-size: 70px; margin-bottom: 20px; }
+        .center { text-align: center; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+        .file-tree { background: #263238; color: #eceff1; padding: 20px; border-radius: 12px; font-family: monospace; font-size: 16px; }
+        .file-tree .folder { color: #90caf9; }
+        .file-tree .file { color: #a5d6a7; }
+        .arch-box { background: linear-gradient(135deg, #fce4ec 0%, #f3e5f5 100%); border: 2px solid #f5576c; border-radius: 15px; padding: 25px; margin: 20px 0; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="nav-bar">
+        <a href="index.html" class="nav-btn home-btn">← 返回首頁</a>
+        <div class="nav-title">Part 4 - 系統架構與程式解析</div>
+        <div class="nav-buttons">
+            <button class="nav-btn" onclick="goToSlide(0)">首頁</button>
+            <button class="nav-btn" onclick="toggleFullscreen()">全螢幕</button>
+            <a href="index.html" class="nav-btn">回總覽</a>
+        </div>
+    </div>
+
+    <div class="slide-container">
+
+        <!-- Slide 1: 封面 -->
+        <div class="slide active">
+            <div class="content-card center">
+                <div class="emoji-large">🏗️</div>
+                <h1>系統架構與程式解析</h1>
+                <h2 style="border: none; font-weight: normal; font-size: 28px; color: #666;">
+                    Part 4：了解 RAG 平台的技術組成與程式碼結構
+                </h2>
+                <div style="margin-top: 40px; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                    <span class="highlight">前後端分離</span>
+                    <span class="highlight">Flask API</span>
+                    <span class="highlight">JavaScript</span>
+                    <span class="highlight">RESTful</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: 專案結構 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📁 專案結構總覽</h2>
+                <div class="two-col">
+                    <div class="file-tree">
+<pre style="background: transparent; margin: 0; padding: 0; color: inherit;">
+<span class="folder">📁 RAG知識庫問答平台/</span>
+├── <span class="file">app.py</span>              # Flask 後端主程式
+├── <span class="file">requirements.txt</span>   # Python 套件清單
+├── <span class="file">README.md</span>          # 說明文件
+│
+├── <span class="folder">📁 templates/</span>
+│   └── <span class="file">index.html</span>     # 主頁面模板
+│
+├── <span class="folder">📁 static/</span>
+│   ├── <span class="file">style.css</span>      # 樣式表
+│   └── <span class="file">script.js</span>      # 前端邏輯
+│
+├── <span class="folder">📁 data/</span>
+│   ├── <span class="file">knowledge_base.json</span>
+│   └── <span class="file">knowledge_base_example.csv</span>
+│
+└── <span class="folder">📁 gas_scripts/</span>
+    └── <span class="file">知識庫API.gs</span>   # Google Apps Script
+</pre>
+                    </div>
+                    <div>
+                        <h3>檔案說明</h3>
+                        <div class="concept-card">
+                            <p><code>app.py</code> - 所有後端邏輯</p>
+                        </div>
+                        <div class="concept-card">
+                            <p><code>templates/</code> - HTML 頁面</p>
+                        </div>
+                        <div class="concept-card">
+                            <p><code>static/</code> - CSS + JS</p>
+                        </div>
+                        <div class="concept-card">
+                            <p><code>data/</code> - 知識庫資料</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: 三層架構 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🏛️ 系統三層架構</h2>
+                <div class="arch-box">
+                    <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 20px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 50px;">🖥️</div>
+                            <h3>前端層</h3>
+                            <p>HTML + CSS + JS</p>
+                            <p style="font-size: 14px; color: #666;">使用者介面</p>
+                        </div>
+                        <div style="font-size: 40px; align-self: center;">⟷</div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 50px;">⚙️</div>
+                            <h3>後端層</h3>
+                            <p>Flask + Python</p>
+                            <p style="font-size: 14px; color: #666;">業務邏輯、API</p>
+                        </div>
+                        <div style="font-size: 40px; align-self: center;">⟷</div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 50px;">💾</div>
+                            <h3>資料層</h3>
+                            <p>JSON 檔案</p>
+                            <p style="font-size: 14px; color: #666;">知識庫儲存</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="box info">
+                    <strong>前後端分離：</strong>前端透過 HTTP API 與後端溝通，資料用 JSON 格式交換。
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: 後端 Flask -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>⚙️ 後端：Flask 框架</h2>
+                <p>Flask 是 Python 輕量級網頁框架，負責處理 HTTP 請求。</p>
+
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>🛣️ 路由（Route）</h3>
+                        <p>定義 URL 路徑對應的處理函式</p>
+                        <code>/api/chat → 聊天功能</code>
+                    </div>
+                    <div class="concept-card">
+                        <h3>📥 請求處理</h3>
+                        <p>接收前端發送的 JSON 資料</p>
+                        <code>request.json</code>
+                    </div>
+                    <div class="concept-card">
+                        <h3>📤 回應生成</h3>
+                        <p>將結果打包成 JSON 回傳</p>
+                        <code>jsonify(result)</code>
+                    </div>
+                    <div class="concept-card">
+                        <h3>📁 靜態檔案</h3>
+                        <p>提供 CSS、JS、圖片等資源</p>
+                        <code>/static/...</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: API 端點 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🔌 主要 API 端點</h2>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 16px;">
+                    <tr style="background: #f5576c; color: white;">
+                        <th style="padding: 12px; border: 1px solid #ddd;">方法</th>
+                        <th style="padding: 12px; border: 1px solid #ddd;">端點</th>
+                        <th style="padding: 12px; border: 1px solid #ddd;">功能</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>POST</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>/api/chat</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">發送訊息，取得 AI 回覆</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;">
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>GET</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>/api/knowledge-base</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">取得知識庫列表</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>POST</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>/api/knowledge-base</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">新增知識</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;">
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>PUT</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>/api/knowledge-base/&lt;id&gt;</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">更新知識</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>DELETE</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>/api/knowledge-base/&lt;id&gt;</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">刪除知識</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;">
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>POST</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;"><code>/api/knowledge-base/search</code></td>
+                        <td style="padding: 12px; border: 1px solid #ddd;">搜尋知識庫</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Slide 6: 聊天 API 流程 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>💬 聊天 API 處理流程</h2>
+
+                <pre style="font-size: 14px;"><code>@app.route('/api/chat', methods=['POST'])
+def chat():
+    # 1. 接收前端資料
+    data = request.json
+    message = data['message']
+    use_rag = data.get('use_rag', False)
+
+    # 2. 若啟用 RAG，進行知識庫搜尋
+    if use_rag:
+        relevant_docs = search_knowledge_base(message)
+        context = build_context(relevant_docs)
+
+    # 3. 呼叫 AI API
+    response = call_ai_api(message, context)
+
+    # 4. 回傳結果
+    return jsonify({
+        'response': response,
+        'sources': relevant_docs
+    })</code></pre>
+
+                <div class="box success">
+                    核心就是：接收 → 搜尋 → AI 生成 → 回傳
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: 前端 JavaScript -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🎨 前端：JavaScript 邏輯</h2>
+                <p>前端使用原生 JavaScript（無框架），主要功能：</p>
+
+                <div class="concept-grid">
+                    <div class="concept-card">
+                        <h3>📝 狀態管理</h3>
+                        <p>使用全域變數儲存對話記錄、設定等</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>🔄 API 呼叫</h3>
+                        <p>使用 <code>fetch()</code> 發送 HTTP 請求</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>🖼️ 畫面更新</h3>
+                        <p>動態生成 HTML 元素顯示對話</p>
+                    </div>
+                    <div class="concept-card">
+                        <h3>💾 本地儲存</h3>
+                        <p>使用 <code>localStorage</code> 保存設定</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Fetch API 範例 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📡 前端發送請求範例</h2>
+
+                <pre style="font-size: 14px;"><code>async function sendMessage(message) {
+    // 1. 準備請求資料
+    const requestData = {
+        message: message,
+        api_key: settings.apiKey,
+        api_type: settings.apiType,
+        use_rag: settings.useRAG
+    };
+
+    // 2. 發送 POST 請求
+    const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
+    });
+
+    // 3. 解析回應
+    const result = await response.json();
+
+    // 4. 顯示結果
+    displayMessage(result.response);
+    displaySources(result.sources);
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- Slide 9: 資料流程圖 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🔄 完整資料流程</h2>
+
+                <div class="arch-box">
+                    <div style="display: flex; flex-direction: column; gap: 20px; align-items: center;">
+                        <div style="background: #e3f2fd; padding: 15px 30px; border-radius: 10px;">
+                            <strong>1. 使用者輸入問題</strong>
+                        </div>
+                        <div>↓</div>
+                        <div style="background: #fff3cd; padding: 15px 30px; border-radius: 10px;">
+                            <strong>2. JavaScript 發送 fetch 請求</strong>
+                        </div>
+                        <div>↓</div>
+                        <div style="background: #fce4ec; padding: 15px 30px; border-radius: 10px;">
+                            <strong>3. Flask 接收並處理</strong>
+                        </div>
+                        <div>↓</div>
+                        <div style="background: #e8f5e9; padding: 15px 30px; border-radius: 10px;">
+                            <strong>4. 向量搜尋知識庫</strong>
+                        </div>
+                        <div>↓</div>
+                        <div style="background: #f3e5f5; padding: 15px 30px; border-radius: 10px;">
+                            <strong>5. 呼叫 AI API 生成答案</strong>
+                        </div>
+                        <div>↓</div>
+                        <div style="background: #e0f7fa; padding: 15px 30px; border-radius: 10px;">
+                            <strong>6. 回傳 JSON → 前端顯示</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: 使用的技術 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>🔧 技術堆疊總覽</h2>
+
+                <div class="two-col">
+                    <div>
+                        <h3>後端技術</h3>
+                        <div class="concept-card">
+                            <ul>
+                                <li><strong>Flask 3.0</strong> - 網頁框架</li>
+                                <li><strong>OpenAI SDK</strong> - GPT API</li>
+                                <li><strong>Google GenAI</strong> - Gemini API</li>
+                                <li><strong>Sentence Transformers</strong> - 向量嵌入</li>
+                                <li><strong>Scikit-learn</strong> - 相似度計算</li>
+                                <li><strong>Pandas</strong> - 資料處理</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>前端技術</h3>
+                        <div class="concept-card">
+                            <ul>
+                                <li><strong>HTML5</strong> - 頁面結構</li>
+                                <li><strong>CSS3</strong> - 樣式設計</li>
+                                <li><strong>JavaScript</strong> - 互動邏輯</li>
+                                <li><strong>Fetch API</strong> - HTTP 請求</li>
+                                <li><strong>LocalStorage</strong> - 本地儲存</li>
+                                <li><strong>Font Awesome</strong> - 圖示</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 11: 總結 -->
+        <div class="slide">
+            <div class="content-card">
+                <h2>📝 Part 4 總結</h2>
+
+                <div class="concept-grid">
+                    <div class="concept-card" style="background: #fce4ec;">
+                        <h3>前後端分離</h3>
+                        <p>前端負責介面，後端負責邏輯，透過 API 溝通</p>
+                    </div>
+                    <div class="concept-card" style="background: #e3f2fd;">
+                        <h3>Flask 後端</h3>
+                        <p>處理 HTTP 請求、呼叫 AI、管理知識庫</p>
+                    </div>
+                    <div class="concept-card" style="background: #e8f5e9;">
+                        <h3>RESTful API</h3>
+                        <p>使用標準的 HTTP 方法（GET/POST/PUT/DELETE）</p>
+                    </div>
+                    <div class="concept-card" style="background: #fff3cd;">
+                        <h3>JSON 資料交換</h3>
+                        <p>前後端使用 JSON 格式傳遞資料</p>
+                    </div>
+                </div>
+
+                <div class="box success" style="margin-top: 30px; text-align: center;">
+                    <h3>🚀 下一步</h3>
+                    <p style="font-size: 22px;">Part 5：知識庫管理與進階應用！</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <button class="nav-arrow prev-arrow" id="prevBtn" onclick="changeSlide(-1)">❮</button>
+    <button class="nav-arrow next-arrow" id="nextBtn" onclick="changeSlide(1)">❯</button>
+    <div class="indicators" id="indicatorContainer"></div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+        function init() { createIndicators(); showSlide(0); updateButtons(); document.addEventListener('keydown', handleKeydown); }
+        function handleKeydown(e) { if (e.key === 'ArrowLeft') changeSlide(-1); if (e.key === 'ArrowRight') changeSlide(1); }
+        function createIndicators() { const container = document.getElementById('indicatorContainer'); container.innerHTML = ''; slides.forEach((_, index) => { const dot = document.createElement('div'); dot.className = 'dot'; dot.onclick = () => goToSlide(index); container.appendChild(dot); }); }
+        function showSlide(index) { if (index < 0) index = 0; if (index >= totalSlides) index = totalSlides - 1; slides.forEach(slide => slide.classList.remove('active')); slides[index].classList.add('active'); currentSlide = index; const dots = document.querySelectorAll('.dot'); dots.forEach((dot, idx) => dot.classList.toggle('active', idx === index)); updateButtons(); }
+        function changeSlide(direction) { showSlide(currentSlide + direction); }
+        function goToSlide(index) { showSlide(index); }
+        function updateButtons() { document.getElementById('prevBtn').disabled = currentSlide === 0; document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1; }
+        function toggleFullscreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else if (document.exitFullscreen) document.exitFullscreen(); }
+        init();
+    </script>
+</body>
+</html>
