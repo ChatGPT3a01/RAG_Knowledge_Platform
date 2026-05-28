@@ -204,7 +204,7 @@ def chat():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def call_openai(api_key, message, system_prompt, history, model_name="gpt-4o"):
+def call_openai(api_key, message, system_prompt, history, model_name="gpt-5.5"):
     """呼叫 OpenAI API（使用 2.x 版本語法）"""
     # 使用新版 OpenAI API（2.x 版本）
     client = openai.OpenAI(api_key=api_key)
@@ -226,7 +226,7 @@ def call_openai(api_key, message, system_prompt, history, model_name="gpt-4o"):
 
     return response.choices[0].message.content
 
-def call_google(api_key, message, system_prompt, history, model_name="gemini-2.5-flash"):
+def call_google(api_key, message, system_prompt, history, model_name="gemini-3.5-flash"):
     """呼叫 Google AI Studio API"""
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(model_name)

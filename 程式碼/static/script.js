@@ -8,7 +8,7 @@ let selectedFile = null;
 let config = {
     apiKey: localStorage.getItem('apiKey') || '',
     apiType: localStorage.getItem('apiType') || 'google',
-    modelName: localStorage.getItem('modelName') || 'gemini-2.5-flash',
+    modelName: localStorage.getItem('modelName') || 'gemini-3.5-flash',
     aiRole: localStorage.getItem('aiRole') || '知識庫助理',
     useRAG: localStorage.getItem('useRAG') !== 'false',
     gasApiUrl: localStorage.getItem('gasApiUrl') || ''
@@ -188,13 +188,13 @@ function updateModelOptions() {
     if (apiType === 'openai') {
         openaiGroup.style.display = '';
         googleGroup.style.display = 'none';
-        // 選擇第一個 OpenAI 模型（預設 GPT-4o）
-        elements.modelName.value = 'gpt-4o';
+        // 選擇第一個 OpenAI 模型（預設 GPT-5.5）
+        elements.modelName.value = 'gpt-5.5';
     } else if (apiType === 'google') {
         openaiGroup.style.display = 'none';
         googleGroup.style.display = '';
         // 選擇第一個 Google 模型（預設 Gemini 2.5 Flash）
-        elements.modelName.value = 'gemini-2.5-flash';
+        elements.modelName.value = 'gemini-3.5-flash';
     }
 }
 
