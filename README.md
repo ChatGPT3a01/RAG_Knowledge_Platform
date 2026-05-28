@@ -79,13 +79,13 @@ python app.py
 ### 4. 設定 API Key
 
 在網頁介面中輸入你的 API Key：
-- **OpenAI API Key**: 支援 GPT-4o 等模型
+- **OpenAI API Key**: 支援 GPT-5.5 等模型
 - **Google API Key**: 支援 Gemini 模型
 
 ## 技術棧
 
 - **後端**: Python 3.8+, Flask, Flask-CORS
-- **AI**: OpenAI API (GPT-4o), Google Gemini API
+- **AI**: OpenAI API (GPT-5.5), Google Gemini API
 - **向量處理**: NumPy, 餘弦相似度計算
 - **前端**: HTML5, CSS3, JavaScript (ES6+)
 - **知識庫**: JSON 檔案儲存、Google Sheets 整合
@@ -102,8 +102,8 @@ python app.py
 
 | 提供者 | 模型 |
 |--------|------|
-| OpenAI | gpt-4o, gpt-4-turbo, gpt-3.5-turbo |
-| Google | gemini-2.5-flash, gemini-2.5-pro |
+| OpenAI | gpt-5.5, gpt-5.5, gpt-5.4-mini |
+| Google | gemini-3.5-flash, gemini-3.5-pro |
 
 ## 部署方式
 
