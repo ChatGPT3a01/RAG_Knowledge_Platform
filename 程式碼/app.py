@@ -204,7 +204,7 @@ def chat():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def call_openai(api_key, message, system_prompt, history, model_name="gpt-5.5"):
+def call_openai(api_key, message, system_prompt, history, model_name="gpt-5.6-terra"):
     """呼叫 OpenAI API（使用 2.x 版本語法）"""
     # 使用新版 OpenAI API（2.x 版本）
     client = openai.OpenAI(api_key=api_key)

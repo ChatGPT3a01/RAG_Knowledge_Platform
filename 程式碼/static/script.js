@@ -188,12 +188,12 @@ function updateModelOptions() {
     if (apiType === 'openai') {
         openaiGroup.style.display = '';
         googleGroup.style.display = 'none';
-        // 選擇第一個 OpenAI 模型（預設 GPT-5.5）
-        elements.modelName.value = 'gpt-5.5';
+        // 選擇第一個 OpenAI 模型（預設 GPT-5.6 Terra）
+        elements.modelName.value = 'gpt-5.6-terra';
     } else if (apiType === 'google') {
         openaiGroup.style.display = 'none';
         googleGroup.style.display = '';
-        // 選擇第一個 Google 模型（預設 Gemini 2.5 Flash）
+        // 選擇第一個 Google 模型（預設 Gemini 3.5 Flash）
         elements.modelName.value = 'gemini-3.5-flash';
     }
 }
